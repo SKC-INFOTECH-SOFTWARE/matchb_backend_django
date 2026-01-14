@@ -137,13 +137,11 @@ def my_profile(request):
         """, [user_id])
 
         if not profile:
-            return JsonResponse({'error': 'Profile not found'}, status=404)
+            return JsonResponse({'error':
+            'Profile not found'}, status=404)
 
         return JsonResponse({'profile': profile[0]})
 
     except Exception as e:
         print(f"Profile fetch error: {e}")
         return JsonResponse({'error': 'Internal server error'}, status=500)
-
-
-
