@@ -1,0 +1,29 @@
+version: '3.8'
+
+services:
+  server:
+    # Use host network to strictly allow connection to VPS host's MySQL on 127.0.0.1
+    network_mode: "host"
+    environment:
+      - DB_HOST=${DB_HOST:-127.0.0.1}
+      - DB_USER=${DB_USER}
+      - DB_PASSWORD=${DB_PASSWORD}
+      - DB_NAME=${DB_NAME}
+      - DB_PORT=3306
+      - JWT_SECRET=${JWT_SECRET}
+      - EXOTEL_SID=${EXOTEL_SID}
+      - EXOTEL_API_KEY=${EXOTEL_API_KEY}
+      - EXOTEL_API_TOKEN=${EXOTEL_API_TOKEN}
+      - EXOTEL_SUBDOMAIN=${EXOTEL_SUBDOMAIN}
+      - EXOTEL_VIRTUAL_NUMBER=${EXOTEL_VIRTUAL_NUMBER}
+      - CLOUDINARY_CLOUD_NAME=${CLOUDINARY_CLOUD_NAME}
+      - CLOUDINARY_API_KEY=${CLOUDINARY_API_KEY}
+      - CLOUDINARY_API_SECRET=${CLOUDINARY_API_SECRET}
+      - APP_URL=${APP_URL}
+      - HAS_CREDIT_DEDUCTION_TRIGGER=false
+    env_file:
+      - .env
+    # Ports are ignored in host mode, app binds directly to 0.0.0.0:8000
+    # ports:
+    #   - "8000:8000"
+    restart: unless-stopped

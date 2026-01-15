@@ -1,3 +1,4 @@
+
 name: Auto Deploy Backend
 
 on:
@@ -20,6 +21,41 @@ jobs:
           key: ${{ secrets.VPS_SSH_KEY }}
           script: |
             cd ${{ secrets.VPS_PATH }}
+
+            # Pull latest code
             git pull origin main
-            docker-compose up -d --build
-            docker-compose exec -T server python manage.py migrate
+
+            # Stop containers
+            docker-compose down
+
+            # Rebuild with no cache
+            docker-compose build --no-cache
+
+            # Start containers
+            docker-compose up -d
+
+            # Wait for container to start
+            sleep 10
+
+            # Check if container is running
+            docker-compose ps
+
+            # Show logs
+            docker-compose logs --tail=50 server
+
+            # Optional: Run migrations (if you add Django models later)
+            # docker-compose exec -T server python manage.py migrate
+
+      - name: Verify Deployment
+        uses: appleboy/ssh-action@v1.0.0
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          script: |
+            cd ${{ secrets.VPS_PATH }}
+
+            # Test if API is responding
+            curl -f http://localhost:8000/api/plans || exit 1
+
+            echo "✅ Deployment successful!"
