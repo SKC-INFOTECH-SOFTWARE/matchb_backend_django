@@ -56,6 +56,6 @@ jobs:
             cd ${{ secrets.VPS_PATH }}
 
             # Test if API is responding
-            curl -f http://localhost:8000/api/plans || exit 1
+            curl -f https://api.matchb.in/api/plans || exit 1
 
             echo "✅ Deployment successful!"
