@@ -1,8 +1,8 @@
 version: '3.8'
-
 services:
   server:
-    # Use host network to strictly allow connection to VPS host's MySQL on 127.0.0.1
+    build:
+      context: .
     network_mode: "host"
     environment:
       - DB_HOST=${DB_HOST:-127.0.0.1}
@@ -23,7 +23,4 @@ services:
       - HAS_CREDIT_DEDUCTION_TRIGGER=false
     env_file:
       - .env
-    # Ports are ignored in host mode, app binds directly to 0.0.0.0:8000
-    # ports:
-    #   - "8000:8000"
     restart: unless-stopped
