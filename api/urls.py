@@ -85,13 +85,8 @@ urlpatterns = [
 
     # ==================== CALLS (5 APIs) ====================
     path('calls/initiate', call_views.initiate_call, name='initiate_call'),
-    path('calls/status/<int:call_session_id>', call_views.call_status, name='call_status'),
-    path('calls/sync-status/<str:call_sid>', call_views.sync_call_status, name='sync_call_status'),
-    path('calls/logs', call_views.call_logs, name='call_logs'),
-    path('calls/webhook', call_views.call_webhook, name='call_webhook'),
 
-    # User call logs (additional)
-    path('user/call-logs', call_views.call_logs, name='user_call_logs_alias'),  # Same as calls/logs
+    path('calls/webhook', call_views.call_webhook, name='call_webhook'),
 
     # ==================== FILE UPLOAD (1 API) ====================
     path('upload', upload_views.upload_file, name='upload_file'),
