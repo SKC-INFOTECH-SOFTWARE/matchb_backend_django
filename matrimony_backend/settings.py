@@ -96,7 +96,7 @@ CLOUDINARY_API_KEY = os.getenv('CLOUDINARY_API_KEY')
 CLOUDINARY_API_SECRET = os.getenv('CLOUDINARY_API_SECRET')
 
 # App URL
-APP_URL = os.getenv('APP_URL', 'http://localhost:8000')
+APP_URL = os.getenv('APP_URL', 'http://localhost:8050')
 
 # Credit Deduction
 HAS_CREDIT_DEDUCTION_TRIGGER = os.getenv('HAS_CREDIT_DEDUCTION_TRIGGER', 'false').lower() == 'true'

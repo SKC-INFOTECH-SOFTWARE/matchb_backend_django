@@ -32,7 +32,7 @@ RUN useradd -m -u 1000 appuser && \
 USER appuser
 
 # Expose port
-EXPOSE 8000
+EXPOSE 8050
 
 # Run with gunicorn
-CMD ["gunicorn", "matrimony_backend.wsgi:application", "--bind", "0.0.0.0:8000", "--workers", "4", "--timeout", "120"]
+CMD ["gunicorn", "matrimony_backend.wsgi:application", "--bind", "0.0.0.0:8050", "--workers", "4", "--timeout", "120"]
