@@ -22,29 +22,30 @@ jobs:
           script: |
             cd ${{ secrets.VPS_PATH }}
 
-            # Pull latest code
-            git pull origin main
+            # First time: clone repo if not a git repo yet
+            if [ ! -d ".git" ]; then
+              git clone https://github.com/${{ github.repository }}.git .
+            else
+              git pull origin main
+            fi
 
-            # Stop containers
-            docker-compose down
+            # Stop containers (ignore if not running)
+            docker compose down || true
 
             # Rebuild with no cache
-            docker-compose build --no-cache
+            docker compose build --no-cache
 
             # Start containers
-            docker-compose up -d
+            docker compose up -d
 
             # Wait for container to start
             sleep 10
 
             # Check if container is running
-            docker-compose ps
+            docker compose ps
 
             # Show logs
-            docker-compose logs --tail=50 server
-
-            # Optional: Run migrations (if you add Django models later)
-            # docker-compose exec -T server python manage.py migrate
+            docker compose logs --tail=50 server
 
       - name: Verify Deployment
         uses: appleboy/ssh-action@v1.0.0
@@ -56,6 +57,6 @@ jobs:
             cd ${{ secrets.VPS_PATH }}
 
             # Test if API is responding
-            curl -f http://localhost:8050/api/plans || exit 1
+            curl -f http://localhost:8050/ || exit 1
 
-            echo "✅ Deployment successful!"
+            echo "Deployment successful!"
