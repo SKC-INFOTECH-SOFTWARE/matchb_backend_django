@@ -78,6 +78,7 @@ def admin_profiles(request):
         query = """
             SELECT
                 u.id as user_id, u.name, u.email, u.phone, u.recovery_password,
+                u.password_change_count,
                 u.status as user_status, u.created_at as user_created_at,
                 up.id as profile_id, up.age, up.gender, up.height, up.weight,
                 up.caste, up.religion, up.mother_tongue, up.marital_status,
@@ -112,6 +113,7 @@ def admin_profiles(request):
                 'email': row['email'],
                 'phone': row['phone'],
                 'recovery_password': row['recovery_password'],
+                'password_change_count': row['password_change_count'] or 0,
                 'user_created_at': str(row['user_created_at']),
                 'age': row['age'],
                 'gender': row['gender'],
@@ -241,6 +243,7 @@ def admin_profiles(request):
         query = """
             SELECT
                 u.id as user_id, u.name, u.email, u.phone, u.recovery_password,
+                u.password_change_count,
                 u.status as user_status, u.created_at as user_created_at,
                 up.id as profile_id, up.age, up.gender, up.height, up.weight,
                 up.caste, up.religion, up.mother_tongue, up.marital_status,
@@ -275,6 +278,7 @@ def admin_profiles(request):
                 'email': row['email'],
                 'phone': row['phone'],
                 'recovery_password': row['recovery_password'],
+                'password_change_count': row['password_change_count'] or 0,
                 'user_created_at': str(row['user_created_at']),
                 'age': row['age'],
                 'gender': row['gender'],

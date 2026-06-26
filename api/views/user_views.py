@@ -665,9 +665,9 @@ def change_password(request):
         # Hash new password
         hashed_new_password = hash_password(new_password)
 
-        # Update password
+        # Update password and track how many times the user has changed it
         execute_update(
-            "UPDATE users SET password = %s WHERE id = %s",
+            "UPDATE users SET password = %s, password_change_count = COALESCE(password_change_count, 0) + 1 WHERE id = %s",
             [hashed_new_password, user_id]
         )
 
