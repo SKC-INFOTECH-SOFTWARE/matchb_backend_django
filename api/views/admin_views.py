@@ -2,6 +2,7 @@ import json
 import random
 import string
 from datetime import datetime, timedelta
+from django.db import IntegrityError, transaction
 from django.http import JsonResponse
 from django.views.decorators.http import require_http_methods
 from django.views.decorators.csrf import csrf_exempt
@@ -92,9 +93,30 @@ def admin_profiles(request):
                 (SELECT COUNT(*) FROM matches WHERE user_id = u.id OR matched_user_id = u.id) as total_matches,
                 CASE WHEN up.id IS NULL THEN 'incomplete_registration' ELSE up.status END as computed_status
             FROM users u
-            LEFT JOIN user_profiles up ON up.user_id = u.id
-            LEFT JOIN user_subscriptions ns ON ns.user_id = u.id AND ns.status = 'active' AND ns.expires_at > NOW()
-            LEFT JOIN user_call_credits cc ON cc.user_id = u.id AND cc.credits_remaining > 0 AND cc.expires_at > NOW()
+            -- Each join below is collapsed to at most one row per user. Joining the
+            -- raw tables fans out (a user with 2 active credit packs / subscriptions
+            -- would be listed twice).
+            LEFT JOIN (
+                SELECT p.*
+                FROM user_profiles p
+                JOIN (
+                    SELECT user_id, MAX(id) AS id
+                    FROM user_profiles
+                    GROUP BY user_id
+                ) latest_profile ON latest_profile.id = p.id
+            ) up ON up.user_id = u.id
+            LEFT JOIN (
+                SELECT user_id, MAX(id) AS id
+                FROM user_subscriptions
+                WHERE status = 'active' AND expires_at > NOW()
+                GROUP BY user_id
+            ) ns ON ns.user_id = u.id
+            LEFT JOIN (
+                SELECT user_id, MAX(id) AS id, SUM(credits_remaining) AS credits_remaining
+                FROM user_call_credits
+                WHERE credits_remaining > 0 AND expires_at > NOW()
+                GROUP BY user_id
+            ) cc ON cc.user_id = u.id
             WHERE u.role = 'user'
             ORDER BY
                 CASE WHEN up.id IS NULL THEN 0 ELSE 1 END,
@@ -257,9 +279,30 @@ def admin_profiles(request):
                 (SELECT COUNT(*) FROM matches WHERE user_id = u.id OR matched_user_id = u.id) as total_matches,
                 CASE WHEN up.id IS NULL THEN 'incomplete_registration' ELSE up.status END as computed_status
             FROM users u
-            LEFT JOIN user_profiles up ON up.user_id = u.id
-            LEFT JOIN user_subscriptions ns ON ns.user_id = u.id AND ns.status = 'active' AND ns.expires_at > NOW()
-            LEFT JOIN user_call_credits cc ON cc.user_id = u.id AND cc.credits_remaining > 0 AND cc.expires_at > NOW()
+            -- Each join below is collapsed to at most one row per user. Joining the
+            -- raw tables fans out (a user with 2 active credit packs / subscriptions
+            -- would be listed twice).
+            LEFT JOIN (
+                SELECT p.*
+                FROM user_profiles p
+                JOIN (
+                    SELECT user_id, MAX(id) AS id
+                    FROM user_profiles
+                    GROUP BY user_id
+                ) latest_profile ON latest_profile.id = p.id
+            ) up ON up.user_id = u.id
+            LEFT JOIN (
+                SELECT user_id, MAX(id) AS id
+                FROM user_subscriptions
+                WHERE status = 'active' AND expires_at > NOW()
+                GROUP BY user_id
+            ) ns ON ns.user_id = u.id
+            LEFT JOIN (
+                SELECT user_id, MAX(id) AS id, SUM(credits_remaining) AS credits_remaining
+                FROM user_call_credits
+                WHERE credits_remaining > 0 AND expires_at > NOW()
+                GROUP BY user_id
+            ) cc ON cc.user_id = u.id
             WHERE u.role = 'user'
             ORDER BY
                 CASE WHEN up.id IS NULL THEN 0 ELSE 1 END,
@@ -874,26 +917,32 @@ def create_profile(request):
         recovery_password = ''.join(random.choices(string.ascii_lowercase + string.digits, k=10))
         hashed_password = hash_password(default_password)
 
-        # Create user
-        user_id = execute_insert("""
-            INSERT INTO users (name, email, phone, password, recovery_password, role, status, created_at)
-            VALUES (%s, %s, %s, %s, %s, 'user', 'active', NOW())
-        """, [data['name'], data['email'], data.get('phone'), hashed_password, recovery_password])
+        # User + profile are inserted together: a failure half-way through must not
+        # leave behind a user row with no profile.
+        try:
+            with transaction.atomic():
+                user_id = execute_insert("""
+                    INSERT INTO users (name, email, phone, password, recovery_password, role, status, created_at)
+                    VALUES (%s, %s, %s, %s, %s, 'user', 'active', NOW())
+                """, [data['name'], data['email'], data.get('phone'), hashed_password, recovery_password])
 
-        # Create profile
-        execute_insert("""
-            INSERT INTO user_profiles (
-                user_id, age, gender, height, weight, caste, religion, mother_tongue,
-                marital_status, education, occupation, income, state, city, family_type,
-                family_status, about_me, partner_preferences, profile_photo, status, created_at
-            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 'approved', NOW())
-        """, [
-            user_id, data['age'], data['gender'], data.get('height'), data.get('weight'),
-            data['caste'], data['religion'], data.get('mother_tongue'), data['marital_status'],
-            data['education'], data['occupation'], data.get('income'), data['state'], data['city'],
-            data.get('family_type'), data.get('family_status'), data.get('about_me'),
-            data.get('partner_preferences'), data.get('profile_photo')
-        ])
+                execute_insert("""
+                    INSERT INTO user_profiles (
+                        user_id, age, gender, height, weight, caste, religion, mother_tongue,
+                        marital_status, education, occupation, income, state, city, family_type,
+                        family_status, about_me, partner_preferences, profile_photo, status, created_at
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 'approved', NOW())
+                """, [
+                    user_id, data['age'], data['gender'], data.get('height'), data.get('weight'),
+                    data['caste'], data['religion'], data.get('mother_tongue'), data['marital_status'],
+                    data['education'], data['occupation'], data.get('income'), data['state'], data['city'],
+                    data.get('family_type'), data.get('family_status'), data.get('about_me'),
+                    data.get('partner_preferences'), data.get('profile_photo')
+                ])
+        except IntegrityError:
+            # Unique index on users.email / users.phone rejected a concurrent duplicate
+            # submit that slipped past the SELECT checks above.
+            return JsonResponse({'error': 'Email or phone number already exists'}, status=409)
 
         return JsonResponse({
             'success': True,
