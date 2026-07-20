@@ -10,7 +10,7 @@ from django.views.decorators.csrf import csrf_exempt
 from django.conf import settings
 from api.utils import require_user
 from api.db_utils import execute_query, execute_insert, execute_update
-from api.exotel_client import parse_price
+from api.exotel_client import parse_price, get_call_details
 # =============================================================================
 # SYNC JOB - Runs every 5 minutes automatically (like Node.js cron.schedule)
 # =============================================================================
@@ -567,6 +567,13 @@ def call_webhook(request):
             final_status = (call_status or 'unknown').lower()
             should_create_call_logs = final_status == 'completed'
             end = end_time if end_time else datetime.now()
+
+            # Exotel's webhook doesn't always include Price. Pull it from the Call
+            # details API so the real per-call cost is never lost.
+            if exotel_price is None and call_sid:
+                details = get_call_details(call_sid)
+                if details:
+                    exotel_price = parse_price(details.get('Price'))
 
             update_query = """
                 UPDATE call_sessions
