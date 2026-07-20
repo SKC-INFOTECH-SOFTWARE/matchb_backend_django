@@ -10,6 +10,7 @@ from django.views.decorators.csrf import csrf_exempt
 from django.conf import settings
 from api.utils import require_user
 from api.db_utils import execute_query, execute_insert, execute_update
+from api.exotel_client import parse_price
 # =============================================================================
 # SYNC JOB - Runs every 5 minutes automatically (like Node.js cron.schedule)
 # =============================================================================
@@ -56,6 +57,9 @@ def sync_stuck_calls():
                 recording_url = call_data.get('RecordingUrl')
                 conversation_duration = int(call_data.get('ConversationDuration') or 0)
                 legs = call_data.get('Legs', [])
+                # Actual amount Exotel charged for this call (real money, kept
+                # separate from the internal per-minute credit accounting).
+                exotel_price = parse_price(call_data.get('Price'))
 
                 duration_minutes = (duration + 59) // 60
                 cost_per_minute = 1.0
@@ -64,14 +68,14 @@ def sync_stuck_calls():
                 # Update call session
                 execute_update("""
                     UPDATE call_sessions
-                    SET status = %s, duration = %s, cost = %s, ended_at = NOW(),
+                    SET status = %s, duration = %s, cost = %s, exotel_price = %s, ended_at = NOW(),
                         recording_url = %s, conversation_duration = %s,
                         leg1_status = %s, leg1_duration = %s,
                         leg2_status = %s, leg2_duration = %s,
                         updated_at = NOW()
                     WHERE id = %s
                 """, [
-                    status, duration, call_cost, recording_url, conversation_duration,
+                    status, duration, call_cost, exotel_price, recording_url, conversation_duration,
                     legs[0].get('Status') if len(legs) > 0 else None,
                     legs[0].get('OnCallDuration', 0) if len(legs) > 0 else 0,
                     legs[1].get('Status') if len(legs) > 1 else None,
@@ -501,6 +505,8 @@ def call_webhook(request):
         end_time = webhook_data.get('EndTime')
         custom_field = webhook_data.get('CustomField')
         legs = webhook_data.get('Legs', [])
+        # Actual amount Exotel charged (real money), separate from internal credits.
+        exotel_price = parse_price(webhook_data.get('Price'))
 
         if not call_sid:
             print('Missing CallSid in webhook')
@@ -564,7 +570,7 @@ def call_webhook(request):
 
             update_query = """
                 UPDATE call_sessions
-                SET status = %s, duration = %s, cost = %s, ended_at = %s,
+                SET status = %s, duration = %s, cost = %s, exotel_price = %s, ended_at = %s,
                     recording_url = %s, conversation_duration = %s,
                     leg1_status = %s, leg1_duration = %s,
                     leg2_status = %s, leg2_duration = %s,
@@ -575,6 +581,7 @@ def call_webhook(request):
                 final_status,
                 duration,
                 call_cost,
+                exotel_price,
                 end,
                 recording_url or None,
                 conversation_duration or 0,
@@ -601,16 +608,16 @@ def call_webhook(request):
             execute_insert("""
                 INSERT INTO call_logs (
                     user_id, other_user_id, call_session_id, call_type,
-                    duration, cost, created_at
-                ) VALUES (%s, %s, %s, 'outgoing', %s, %s, NOW())
-            """, [s['caller_id'], s['receiver_id'], s['id'], duration, call_cost])
+                    duration, cost, exotel_price, created_at
+                ) VALUES (%s, %s, %s, 'outgoing', %s, %s, %s, NOW())
+            """, [s['caller_id'], s['receiver_id'], s['id'], duration, call_cost, exotel_price])
 
             execute_insert("""
                 INSERT INTO call_logs (
                     user_id, other_user_id, call_session_id, call_type,
-                    duration, cost, created_at
-                ) VALUES (%s, %s, %s, 'incoming', %s, %s, NOW())
-            """, [s['receiver_id'], s['caller_id'], s['id'], duration, call_cost])
+                    duration, cost, exotel_price, created_at
+                ) VALUES (%s, %s, %s, 'incoming', %s, %s, %s, NOW())
+            """, [s['receiver_id'], s['caller_id'], s['id'], duration, call_cost, exotel_price])
 
             # Only deduct credits if no database trigger handles it
             has_trigger = getattr(settings, 'HAS_CREDIT_DEDUCTION_TRIGGER', False)

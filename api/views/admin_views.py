@@ -8,6 +8,7 @@ from django.views.decorators.http import require_http_methods
 from django.views.decorators.csrf import csrf_exempt
 from api.utils import require_admin, hash_password, verify_password
 from api.db_utils import execute_query, execute_insert, execute_update
+from api.exotel_client import get_account_balance
 
 # ==================== STATS API ====================
 @csrf_exempt
@@ -1198,6 +1199,21 @@ def exotel_credits(request):
 
         used = used_data[0]
 
+        # Actual amount Exotel charged for calls (real per-call Price captured from
+        # Exotel), kept separate from the internal credit accounting above.
+        actual_spend = execute_query("""
+            SELECT COALESCE(SUM(exotel_price), 0) as total_spend,
+                   COALESCE(SUM(CASE
+                       WHEN MONTH(created_at) = MONTH(NOW()) AND YEAR(created_at) = YEAR(NOW())
+                       THEN exotel_price ELSE 0 END), 0) as current_month_spend
+            FROM call_sessions
+            WHERE status = 'completed' AND exotel_price IS NOT NULL
+        """)
+        spend = actual_spend[0]
+
+        # Live wallet balance straight from the Exotel account (real-time).
+        live_balance = get_account_balance()
+
         return JsonResponse({
             'credits': {
                 'total_credits': cfg['total_credits'],
@@ -1207,6 +1223,11 @@ def exotel_credits(request):
                 'monthly_limit': cfg['monthly_limit'],
                 'current_month_usage': used['current_month_usage'],
                 'last_updated': str(cfg['updated_at'])
+            },
+            'live_balance': live_balance,
+            'actual_spend': {
+                'total': float(spend['total_spend'] or 0),
+                'current_month': float(spend['current_month_spend'] or 0),
             }
         })
 
